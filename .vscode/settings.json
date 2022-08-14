@@ -11,6 +11,7 @@
         "esp_nimble_hci.h": "c",
         "rmt.h": "c",
         "nvs_flash.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "nimble_port.h": "c"
     }
 }

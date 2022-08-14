@@ -1,7 +1,5 @@
 #include "sdkconfig.h"
 #include "esp_log.h"
-#include "driver/rmt.h"
-#include "led_strip.h"
 
 /* BLE */
 #include "nvs_flash.h"
@@ -15,11 +13,7 @@
 #include "services/gap/ble_svc_gap.h"
 #include "blehr_sens.h"
 
-static const char *TAG = "example";
-
-#define RMT_TX_CHANNEL RMT_CHANNEL_0
-
-static const char *tag = "NimBLE_BLE_HeartRate";
+#include "ledController.h"
 
 static xTimerHandle blehr_tx_timer;
 static bool notify_state;
@@ -27,14 +21,9 @@ static uint16_t conn_handle;
 static const char *device_name = "blehr_sensor_1.0";
 static uint8_t blehr_addr_type;
 
-uint32_t red = 255;
-uint32_t green = 210;
-uint32_t blue = 135;
-
 static int blehr_gap_event(struct ble_gap_event *event, void *arg);
 void print_bytes(const uint8_t *bytes, int len);
 void print_addr(const void *addr);
-void led_strip_hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, uint32_t *g, uint32_t *b);
 
 static void blehr_tx_hrate(xTimerHandle ev);
 static void blehr_tx_hrate_stop(void);
@@ -53,7 +42,7 @@ blehr_advertise(void)
     int rc;
 
     /*
-     *  Set the advertisement datvoid led_strip_hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, uint32_t *g, uint32_t *b)
+     *  Set the advertisement dat
         included in our advertisements:
      *     o Flags (indicates advertisement type and other general info)
      *     o Advertising tx power
@@ -134,8 +123,10 @@ blehr_gap_event(struct ble_gap_event *event, void *arg)
                     event->subscribe.cur_notify, RGB_data_handle);
         if (event->subscribe.attr_handle == RGB_data_handle) {
             notify_state = event->subscribe.cur_notify;
+            blehr_tx_hrate_reset();
         } else if (event->subscribe.attr_handle != RGB_data_handle) {
             notify_state = event->subscribe.cur_notify;
+            blehr_tx_hrate_stop();
         }
         ESP_LOGI("BLE_GAP_SUBSCRIBE_EVENT", "conn_handle from subscribe=%d", conn_handle);
         break;
@@ -178,15 +169,14 @@ blehr_on_reset(int reason)
 
 void blehr_host_task(void *param)
 {
-    ESP_LOGI(tag, "BLE Host Task Started");
-    /* This function will return only when nimble_port_stop() is executed */
     nimble_port_run();
-
     nimble_port_freertos_deinit();
 }
 
 void app_main(void)
 {
+    initLEDController();
+
     int rc;
 
     /* Initialize NVS — it is used to store PHY calibration data */
@@ -217,29 +207,7 @@ void app_main(void)
     /* Start the task */
     nimble_port_freertos_init(blehr_host_task); 
   
-    rmt_config_t config = RMT_DEFAULT_CONFIG_TX(13, RMT_TX_CHANNEL);
-    // set counter clock to 40MHz
-    config.clk_div = 2;
 
-    ESP_ERROR_CHECK(rmt_config(&config));
-    ESP_ERROR_CHECK(rmt_driver_install(config.channel, 0, 0));
-
-    // install ws2812 driver
-    led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(6, (led_strip_dev_t)config.channel);
-    led_strip_t *strip = led_strip_new_rmt_ws2812(&strip_config);
-    if (!strip) {
-        ESP_LOGE(TAG, "install WS2812 driver failed");
-    }
-    // Clear LED strip (turn off all LEDs)
-    ESP_ERROR_CHECK(strip->clear(strip, 100));
-
-    ESP_ERROR_CHECK(strip->set_pixel(strip, 0, red, green, blue));
-    ESP_ERROR_CHECK(strip->set_pixel(strip, 1, red, green, blue));
-    ESP_ERROR_CHECK(strip->set_pixel(strip, 2, red, green, blue));
-    ESP_ERROR_CHECK(strip->set_pixel(strip, 3, red, green, blue));
-    ESP_ERROR_CHECK(strip->set_pixel(strip, 4, red, green, blue));
-    ESP_ERROR_CHECK(strip->set_pixel(strip, 5, red, green, blue));
-    ESP_ERROR_CHECK(strip->refresh(strip, 100));
 }
 
 
@@ -261,51 +229,6 @@ void print_addr(const void *addr)
                 u8p[5], u8p[4], u8p[3], u8p[2], u8p[1], u8p[0]);
 }
 
-void led_strip_hsv2rgb(uint32_t h, uint32_t s, uint32_t v, uint32_t *r, uint32_t *g, uint32_t *b)
-{
-    h %= 360; // h -> [0,360]
-    uint32_t rgb_max = v * 2.55f;
-    uint32_t rgb_min = rgb_max * (100 - s) / 100.0f;
-
-    uint32_t i = h / 60;
-    uint32_t diff = h % 60;
-
-    // RGB adjustment amount by hue
-    uint32_t rgb_adj = (rgb_max - rgb_min) * diff / 60;
-
-    switch (i) {
-    case 0:
-        *r = rgb_max;
-        *g = rgb_min + rgb_adj;
-        *b = rgb_min;
-        break;
-    case 1:
-        *r = rgb_max - rgb_adj;
-        *g = rgb_max;
-        *b = rgb_min;
-        break;
-    case 2:
-        *r = rgb_min;
-        *g = rgb_max;
-        *b = rgb_min + rgb_adj;
-        break;
-    case 3:
-        *r = rgb_min;
-        *g = rgb_max - rgb_adj;
-        *b = rgb_max;
-        break;
-    case 4:
-        *r = rgb_min + rgb_adj;
-        *g = rgb_min;
-        *b = rgb_max;
-        break;
-    default:
-        *r = rgb_max;
-        *g = rgb_min;
-        *b = rgb_max - rgb_adj;
-        break;
-    }
-}
 
 static void
 blehr_tx_hrate_stop(void)
@@ -335,16 +258,16 @@ static void blehr_tx_hrate(xTimerHandle ev)
     int rc;
     struct os_mbuf *om;
 
-
     if (!notify_state) {
         blehr_tx_hrate_stop();
         return;
     }
 
+    hrm[0] = getRed();
+    hrm[1] = getGreen();
+    hrm[2] = getBlue();
 
-    hrm[0] = red;
-    hrm[1] = green;
-    hrm[2] = blue;
+    ESP_LOGE(TAG, "%d %d %d", hrm[0], hrm[1], hrm[2]);
 
     om = ble_hs_mbuf_from_flat(hrm, sizeof(hrm));
     rc = ble_gattc_notify_custom(conn_handle, RGB_data_handle, om);

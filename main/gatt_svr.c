@@ -27,24 +27,36 @@
 #include "blehr_sens.h"
 #include "esp_log.h"
 
+#include "ledController.h"
+
 uint16_t RGB_data_handle;
 
-static int 
-device_write(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg);
 
-static int
-gatt_svr_chr_access_heart_rate(uint16_t conn_handle, uint16_t attr_handle,
+static int device_write(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
+    char *incoming_data = (char *)ctxt->om->om_data;
+    printf("incoming message: %s\n", incoming_data);
+    
+    char *token = strtok(incoming_data, ",");
+    int r = atoi(token);
+    token = strtok(NULL, ",");
+    int g = atoi(token);
+    token = strtok(NULL, ",");
+    int b = atoi(token);
+    
+
+    setAllLED(r,g,b);
+
+    return 0;
+}
+
+static int gatt_svr_chr_access_heart_rate(uint16_t conn_handle, uint16_t attr_handle,
                                struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
     uint16_t uuid;
     int rc;
 
     uuid = ble_uuid_u16(ctxt->chr->uuid);
-
-    // if (uuid == 0x2AF7) {
-    //     rc = os_mbuf_append(ctxt->om, "", strlen(0));
-    //     return rc == 0 ? 0 : BLE_ATT_ERR_INSUFFICIENT_RES;
-    // }
 
     assert(0);
     return BLE_ATT_ERR_UNLIKELY;
@@ -58,7 +70,7 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
         .characteristics = (struct ble_gatt_chr_def[])
         { {
                 /* Characteristic: Heart-rate measurement */
-                .uuid = BLE_UUID16_DECLARE(GATT_HRS_MEASUREMENT_UUID),
+                .uuid = BLE_UUID16_DECLARE(0x2AF7),
                 .access_cb = gatt_svr_chr_access_heart_rate,
                 .val_handle = &RGB_data_handle,
                 .flags = BLE_GATT_CHR_F_NOTIFY,
@@ -85,13 +97,6 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
         0, /* No more services */
     },
 };
-
-static int device_write(uint16_t conn_handle, uint16_t attr_handle, struct ble_gatt_access_ctxt *ctxt, void *arg)
-{
-    char *incoming_data = (char *)ctxt->om->om_data;
-    printf("incoming message: %s\n", incoming_data);
-    return 0;
-}
 
 void
 gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
