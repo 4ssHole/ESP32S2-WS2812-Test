@@ -1,8 +1,16 @@
 {
-    "idf.adapterTargetName": "esp32s2",
+    "idf.adapterTargetName": "esp32s3",
     "idf.openOcdConfigs": [
-        "interface/ftdi/esp32_devkitj_v1.cfg",
-        "target/esp32s2.cfg"
+        "board/esp32s3-builtin.cfg"
     ],
-    "idf.portWin": "COM8"
+    "idf.flashType": "UART",
+    "idf.portWin": "COM8",
+    "files.associations": {
+        "esp_log.h": "c",
+        "freertosconfig.h": "c",
+        "esp_nimble_hci.h": "c",
+        "rmt.h": "c",
+        "nvs_flash.h": "c",
+        "string.h": "c"
+    }
 }
