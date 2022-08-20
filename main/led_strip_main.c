@@ -206,8 +206,6 @@ void app_main(void)
 
     /* Start the task */
     nimble_port_freertos_init(blehr_host_task); 
-  
-
 }
 
 

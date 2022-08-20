@@ -23,7 +23,7 @@
 #include "driver/rmt.h"
 #include "led_strip.h"
 #include "esp_log.h"
-
+#include "NVSHelper.h"
 
 #define RMT_TX_CHANNEL RMT_CHANNEL_0
 

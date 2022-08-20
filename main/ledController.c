@@ -1,14 +1,21 @@
 #include "ledController.h"
 
-int red = 0, green = 0, blue = 0;
+uint8_t red = 0, green = 0, blue = 0;
 
 void initLEDController(){
+    nvs_init();
+
+    nvs_get("red", &red, 256);
+    nvs_get("green", &green, 256);
+    nvs_get("blue", &blue, 256);
+
     rmt_config_t config = RMT_DEFAULT_CONFIG_TX(13, RMT_TX_CHANNEL);
     // set counter clock to 40MHz
     config.clk_div = 2;
+    // config.flags = RMT_CHANNEL_FLAGS_AWARE_DFS;
 
     ESP_ERROR_CHECK(rmt_config(&config));
-    ESP_ERROR_CHECK(rmt_driver_install(config.channel, 0, 0));
+    ESP_ERROR_CHECK(rmt_driver_install(config.channel, 1024, 0));
 
     // install ws2812 driver
     led_strip_config_t strip_config = LED_STRIP_DEFAULT_CONFIG(6, (led_strip_dev_t)config.channel);
@@ -16,21 +23,32 @@ void initLEDController(){
     if (!strip) {
         ESP_LOGE(TAG, "install WS2812 driver failed");
     }
+
+    ESP_LOGE(TAG, "colors : %d, %d, %d", red, green, blue);
+    setAllLED(red, green, blue);
 }
 
 void setAllLED(uint8_t setRed, uint8_t setGreen, uint8_t setBlue){
+    
+    nvs_set("red", setRed);
+    nvs_set("green", setGreen);
+    nvs_set("blue", setBlue);
+
+
     red = setRed;
     green = setGreen;
     blue = setBlue;
-    // Clear LED strip (turn off all LEDs)
-    ESP_ERROR_CHECK(strip->clear(strip, 100));
 
+    
+
+    ESP_ERROR_CHECK(strip->clear(strip, 100));
     ESP_ERROR_CHECK(strip->set_pixel(strip, 0, red, green, blue));
     ESP_ERROR_CHECK(strip->set_pixel(strip, 1, red, green, blue));
     ESP_ERROR_CHECK(strip->set_pixel(strip, 2, red, green, blue));
     ESP_ERROR_CHECK(strip->set_pixel(strip, 3, red, green, blue));
     ESP_ERROR_CHECK(strip->set_pixel(strip, 4, red, green, blue));
     ESP_ERROR_CHECK(strip->set_pixel(strip, 5, red, green, blue));
+
     ESP_ERROR_CHECK(strip->refresh(strip, 100));
 }
 
